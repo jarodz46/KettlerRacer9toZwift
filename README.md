@@ -7,7 +7,7 @@
 
 # Kettler Racer 9 to Zwift Bridge (BLE)
 
-This Node.js bridge connects older Kettler Racer 9 bikes to Zwift (or any FTMS-compatible app) via Bluetooth Low Energy. It got developped and tested on a Raspberry Pi 2 W, so that's what I would recommend using. 
+This Node.js bridge connects older Kettler Racer 9 bikes to Zwift (or any FTMS-compatible app) via Bluetooth Low Energy. This software handles two-way communication, allowing Zwift to read your power/cadence and automatically adjust your bike's resistance to match the virtual terrain. It got developped and tested on a Raspberry Pi 2 W, so that's what I would recommend using. 
 
 ## Prerequisites
 * Raspberry Pi (Zero W, 3, 4, or 5)
