@@ -11,11 +11,6 @@ This Node.js bridge connects older Kettler Racer 9 bikes to Zwift (or any FTMS-c
 
 It solves connection dropouts and command collisions common with Python implementations by using non-blocking I/O.
 
-## Features
-* **Solid Stability:** Non-blocking Serial/BLE I/O prevents drops.
-* **Traffic Control:** Intelligently queues commands to prevent bike "lockups."
-* **Auto-Reconnect:** Automatically recovers if the USB cable is bumped.
-
 ## Prerequisites
 * Raspberry Pi (Zero W, 3, 4, or 5)
 * Kettler Racer 9 connected via USB
