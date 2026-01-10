@@ -1,10 +1,5 @@
 /*
  * Kettler Racer 9 to Zwift Bridge (Node.js)
- * Final Version: Stable + Traffic Control
- * * Features:
- * - Non-blocking I/O for 100% connection stability.
- * - "Traffic Control" logic to prevent command collisions.
- * - Auto-reconnects to USB if cable is bumped.
  */
 
 const bleno = require('@abandonware/bleno');
