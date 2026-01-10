@@ -5,8 +5,38 @@
  https://opensource.org/licenses/MIT
 -->
 
-# OldKettler2Zwift
+# Kettler Racer 9 to Zwift Bridge (BLE)
 
-!!!Work in Progress!!!
+This Node.js bridge connects older Kettler Racer 9 bikes to Zwift (or any FTMS-compatible app) via Bluetooth Low Energy.
 
-This software upgrades your classic Kettler indoor bike into an intelligent training device, enabling connectivity with your preferred fitness applications. Designed to operate on a Raspberry Pi, the program establishes a serial port connection with your Kettler bike, managing data processing and transmission to platforms like Zwift or similar services. Additionally, the Raspberry Pi actively monitors incoming requests from Zwift, adjusting the bike's resistance to match the virtual training environment.
+It solves connection dropouts and command collisions common with Python implementations by using non-blocking I/O.
+
+## Features
+* **Solid Stability:** Non-blocking Serial/BLE I/O prevents drops.
+* **Traffic Control:** Intelligently queues commands to prevent bike "lockups."
+* **Auto-Reconnect:** Automatically recovers if the USB cable is bumped.
+
+## Prerequisites
+* Raspberry Pi (Zero W, 3, 4, or 5)
+* Kettler Racer 9 connected via USB
+
+## Quick Start
+
+1.  **Clone the repo:**
+    ```bash
+    git clone [https://github.com/yourusername/kettler-zwift-bridge.git](https://github.com/yourusername/kettler-zwift-bridge.git)
+    cd kettler-zwift-bridge
+    ```
+
+2.  **Run the installer:**
+    ```bash
+    chmod +x install.sh
+    ./install.sh
+    ```
+
+That's it! The service will start automatically and run on boot.
+
+## Manual Usage
+To check logs:
+```bash
+journalctl -u kettler-bridge -f

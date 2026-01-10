@@ -1,0 +1,24 @@
+{
+  "name": "oldkettler2zwift",
+  "version": "1.0.0",
+  "description": "<!--  Copyright (c) 2024 Louis Jouret",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/LouisJouret/OldKettler2Zwift.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/LouisJouret/OldKettler2Zwift/issues"
+  },
+  "homepage": "https://github.com/LouisJouret/OldKettler2Zwift#readme",
+  "dependencies": {
+    "@abandonware/bleno": "^0.6.2",
+    "serialport": "^13.0.0"
+  }
+}
