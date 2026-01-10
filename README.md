@@ -24,7 +24,7 @@ It solves connection dropouts and command collisions common with Python implemen
 
 1.  **Clone the repo:**
     ```bash
-    git clone [https://github.com/yourusername/kettler-zwift-bridge.git](https://github.com/yourusername/kettler-zwift-bridge.git)
+    git clone git@github.com:LouisJouret/KettlerRacer9toZwift.git
     cd kettler-zwift-bridge
     ```
 
