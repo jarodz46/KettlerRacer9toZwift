@@ -33,3 +33,25 @@ Connect the Kettler Racer 9 to the Raspberry Pi over USB and that's it! The serv
 To check logs:
 ```bash
 journalctl -u kettler-bridge -f
+```
+
+## Uninstalling
+
+If you wish to remove the service and stop the bridge from running on boot:
+
+1.  **Stop and disable the background service:**
+    ```bash
+    sudo systemctl stop kettler-bridge
+    sudo systemctl disable kettler-bridge
+    ```
+
+2.  **Remove the system configuration:**
+    ```bash
+    sudo rm /etc/systemd/system/kettler-bridge.service
+    sudo systemctl daemon-reload
+    ```
+
+3.  **Delete the code (optional):**
+    ```bash
+    rm -rf kettler-zwift-bridge
+    ```
