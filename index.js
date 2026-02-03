@@ -9,7 +9,7 @@ const { ReadlineParser } = require('@serialport/parser-readline');
 // --- CONFIGURATION ---
 const SERIAL_PORT = '/dev/ttyUSB0';
 const BAUD_RATE = 57600;
-const MY_NAME = 'KettlerRacer9';
+const MY_NAME = 'KettlerBike';
 
 // UUIDs (Standard Fitness Machine Service)
 const FTMS_SERVICE_UUID = '1826';
