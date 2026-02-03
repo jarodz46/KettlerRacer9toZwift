@@ -126,6 +126,24 @@ const indoorBikeDataChar = new bleno.Characteristic({
   }
 });
 
+const gearChar = new bleno.Characteristic({
+  uuid: '2AD5', // FTMS Gear characteristic
+  properties: ['read', 'notify'],
+  onReadRequest: (offset, callback) => {
+    const buffer = Buffer.alloc(2);
+    // Gear: UInt16LE (1-12)
+    buffer.writeUInt16LE(bikeState.gear || 1, 0);
+    callback(bleno.Characteristic.RESULT_SUCCESS, buffer);
+  },
+  onSubscribe: (maxValueSize, updateValue) => {
+    console.log('[BLE] Gear Subscribed');
+    bikeState.gearUpdateCallback = updateValue;
+  },
+  onUnsubscribe: () => {
+    bikeState.gearUpdateCallback = null;
+  }
+});
+
 const controlPointChar = new bleno.Characteristic({
   uuid: FTMS_CONTROL_POINT_UUID,
   properties: ['write', 'indicate'],
@@ -200,6 +218,13 @@ const controlPointChar = new bleno.Characteristic({
             gear = data.readUInt8(8);
             if (gear < 1 || gear > 12) gear = 1; // Sanity check
             bikeState.gear = gear;
+          }
+
+          if (gear != 5 && bikeState.gearUpdateCallback) {
+              console.log(`[Zwift] Updating Gear to 5 for simulation`);
+              const gearBuffer = Buffer.alloc(2);
+              gearBuffer.writeUInt16LE(5, 0);
+              bikeState.gearUpdateCallback(gearBuffer);
           }
 
           const grade = gradeHundredths / 100.0; // percent
@@ -322,7 +347,7 @@ bleno.on('advertisingStart', (error) => {
     bleno.setServices([
       new bleno.PrimaryService({
         uuid: FTMS_SERVICE_UUID,
-        characteristics: [indoorBikeDataChar, controlPointChar]
+        characteristics: [indoorBikeDataChar, gearChar, controlPointChar]
       })
     ]);
   } else {
