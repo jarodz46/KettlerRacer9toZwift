@@ -200,7 +200,7 @@ const controlPointChar = new bleno.Characteristic({
           let crrRaw = 0;
           let cdaRaw = 0;
           let windHundredths = 0;
-          let gear = 1;
+          let gear = 5;
 
           if (data.length >= 3) {
             gradeHundredths = data.readInt16LE(1);
@@ -214,18 +214,18 @@ const controlPointChar = new bleno.Characteristic({
           if (data.length >= 9) {
             windHundredths = data.readInt16LE(4);
           }
-          if (data.length >= 10) {
-            gear = data.readUInt8(8);
-            if (gear < 1 || gear > 12) gear = 1; // Sanity check
-            bikeState.gear = gear;
-          }
+          // if (data.length >= 10) {
+          //   gear = data.readUInt8(8);
+          //   if (gear < 1 || gear > 12) gear = 1; // Sanity check
+          //   bikeState.gear = gear;
+          // }
 
-          if (gear != 5 && bikeState.gearUpdateCallback) {
-              console.log(`[Zwift] Updating Gear to 5 for simulation`);
-              const gearBuffer = Buffer.alloc(2);
-              gearBuffer.writeUInt16LE(5, 0);
-              bikeState.gearUpdateCallback(gearBuffer);
-          }
+          // if (gear != 5 && bikeState.gearUpdateCallback) {
+          //     console.log(`[Zwift] Updating Gear to 5 for simulation`);
+          //     const gearBuffer = Buffer.alloc(2);
+          //     gearBuffer.writeUInt16LE(5, 0);
+          //     bikeState.gearUpdateCallback(gearBuffer);
+          // }
 
           const grade = gradeHundredths / 100.0; // percent
           const crr = crrRaw / 10000.0; // rolling resistance (typical format)
