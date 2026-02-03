@@ -27,6 +27,14 @@ let bikeState = {
   busy: false // Prevents status loop from interrupting commands
 };
 
+// --- PHYSICAL MODEL CONFIGURATION ---
+const RIDER_MASS = 75; // kg (tunable)
+const GRAVITY = 9.80665; // m/s^2
+const Crr = 0.004; // rolling resistance coefficient (typical)
+const CdA = 0.5; // frontal area * drag coeff (m^2)
+const AIR_DENSITY = 1.226; // kg/m^3 at sea level
+const WHEEL_CIRCUMFERENCE = 2.1; // estimated meters per crank rev (tunable)
+
 // --- SERIAL CONNECTION ---
 const port = new SerialPort({
   path: SERIAL_PORT,
@@ -160,17 +168,71 @@ const controlPointChar = new bleno.Characteristic({
         bikeState.mode = 'SIM';
         break;
 
-      case 0x11: // Set Simulation Parameters (Slope/Wind)
-        if (bikeState.mode !== 'SIM') {
-           bikeState.mode = 'SIM';
-           // Use Traffic Control for gear switching too
-           bikeState.busy = true;
-           writeSerial('CM');
-           setTimeout(() => {
-             writeSerial(`BL${100 + 8}`); // Default to Gear 8
-             bikeState.gear = 8;
-             setTimeout(() => { bikeState.busy = false; }, 150);
-           }, 150);
+      case 0x11: // Set Simulation Parameters (Slope/Wind/Crr/CdA/Gear)
+        // Parse simulation parameters from FTMS payload:
+        // offset 1: grade (SInt16, hundredths of percent)
+        // offset 2: Crr (SInt16, format varies - typically x10000)
+        // offset 3: CdA (SInt16, format varies - typically x10000)
+        // offset 4+: wind (SInt16), gear, etc.
+        try {
+          // Ensure we are in SIM mode
+          if (bikeState.mode !== 'SIM') bikeState.mode = 'SIM';
+
+          let gradeHundredths = 0;
+          let crrRaw = 0;
+          let cdaRaw = 0;
+          let windHundredths = 0;
+          let gear = 1;
+
+          if (data.length >= 3) {
+            gradeHundredths = data.readInt16LE(1);
+          }
+          if (data.length >= 5) {
+            crrRaw = data.readInt16LE(2);
+          }
+          if (data.length >= 7) {
+            cdaRaw = data.readInt16LE(3);
+          }
+          if (data.length >= 9) {
+            windHundredths = data.readInt16LE(4);
+          }
+          if (data.length >= 10) {
+            gear = data.readUInt8(8);
+            if (gear < 1 || gear > 12) gear = 1; // Sanity check
+            bikeState.gear = gear;
+          }
+
+          const grade = gradeHundredths / 100.0; // percent
+          const crr = crrRaw / 10000.0; // rolling resistance (typical format)
+          const cda = cdaRaw / 10000.0; // drag coefficient*area (typical format)
+          const wind = windHundredths / 100.0; // m/s
+
+          const estimatedPower = computePowerFromSimulation({
+            gradePercent: grade,
+            windMps: wind,
+            crr: crr,
+            cda: cda,
+            gear: gear
+          });
+          const targetPower = Math.max(0, Math.round(estimatedPower));
+          console.log(`[Zwift] SIM: grade=${grade}% wind=${wind}m/s crr=${crr.toFixed(4)} cda=${cda.toFixed(4)} gear=${gear} -> ${targetPower}W`);
+
+          bikeState.targetPower = targetPower;
+
+          // Use Traffic Control to send the power to the trainer
+          bikeState.busy = true;
+          writeSerial('CM');
+          setTimeout(() => {
+            writeSerial(`PW${targetPower}`);
+            // Also set gear if available in trainer protocol
+            if (gear >= 1 && gear <= 12) {
+              const gearCode = 100 + gear; // BL<code> format
+              writeSerial(`BL${gearCode}`);
+            }
+            setTimeout(() => { bikeState.busy = false; }, 150);
+          }, 150);
+        } catch (err) {
+          console.error('[Zwift] Error parsing simulation params', err);
         }
         break;
     }
@@ -214,6 +276,35 @@ function sendBikeData() {
   if (updateValueCallback) {
     updateValueCallback(getBikeDataBuffer());
   }
+}
+
+// Compute an estimated power (watts) from simulation parameters.
+// Uses a simple bicycle physics model with an estimated speed derived
+// from cadence and a wheel circumference assumption.
+// Gear affects wheel speed: higher gear = higher speed multiplier.
+function computePowerFromSimulation({ gradePercent = 0, windMps = 0, crr = Crr, cda = CdA, gear = 1 }) {
+  // Estimate forward speed from cadence: assume one crank rev -> WHEEL_CIRCUMFERENCE meters
+  // Gear acts as a multiplier: gear N means N times the base cadence-to-speed conversion
+  const cadenceRps = Math.max(0.1, bikeState.cadence / 60.0); // revs per second
+  const baseSpeed = cadenceRps * WHEEL_CIRCUMFERENCE; // m/s
+  const speed = baseSpeed * (gear / 8.0); // normalize to mid-gear (8), so gear 8 => 1x multiplier
+
+  // gradePercent is in percent (e.g., 1.5 => 1.5%)
+  const grade = gradePercent / 100.0; // unitless
+
+  // gravitational power: m * g * v * sin(theta) ~ m*g*v*grade (small angle)
+  const pGrav = RIDER_MASS * GRAVITY * speed * grade;
+
+  // rolling resistance (using passed-in crr parameter)
+  const pRoll = RIDER_MASS * GRAVITY * crr * speed;
+
+  // aerodynamic drag: 0.5 * rho * CdA * v_rel^3
+  // approximate v_rel = speed - wind (wind positive headwind), so use speed + windMps
+  const vRel = Math.max(0, speed + windMps);
+  const pAero = 0.5 * AIR_DENSITY * cda * Math.pow(vRel, 3);
+
+  const total = pGrav + pRoll + pAero;
+  return total;
 }
 
 // --- START BLENO ---
