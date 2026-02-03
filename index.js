@@ -100,13 +100,13 @@ function updateSimPower() {
 		simpower = Math.max(0.0, simpower * (1.0 + 0.1 * (bikeState.gear - 5)));
 		// store
 		bikeState.targetPower = simpower.toFixed(1);
-
+    console.log(`[SIM] Setting Power: ${bikeState.targetPower}W (Gear: ${bikeState.gear})`);
     // Use Traffic Control to send the power to the trainer
     if (bikeState.targetPower != bikeState.power) {
       bikeState.busy = true;
       writeSerial('CM');
       setTimeout(() => {
-          console.log(`[SIM] Setting Power: ${bikeState.targetPower}W (Gear: ${bikeState.gear})`);
+          
           writeSerial(`PW${bikeState.targetPower}`);
           setTimeout(() => { bikeState.busy = false; }, 150);
       }, 150);
@@ -231,7 +231,7 @@ const controlPointChar = new bleno.Characteristic({
             externalConditions.windspeed = data.readInt16LE(0);
           }
 
-          console.log(`[Zwift] SIM: ${externalConditions}`);
+          console.log(`[Zwift] SIM: ${JSON.stringify(externalConditions)}`);
 
           
         } catch (err) {
