@@ -98,11 +98,13 @@ function updateSimPower() {
     var simpower = 170 * (1 + 1.15 * (bikeState.cadence - 80.0) / 80.0) * (1.0 + 3 * externalConditions.grade / 100.0);
 		// apply gear
 		simpower = Math.max(0.0, simpower * (1.0 + 0.1 * (bikeState.gear - 5)));
+    if (simpower < 75.0) simpower = 75.0;  // minimum power
 		// store
 		bikeState.targetPower = simpower.toFixed(1);
-    console.log(`[SIM] Setting Power: ${bikeState.targetPower}W (Gear: ${bikeState.gear})`);
+    
     // Use Traffic Control to send the power to the trainer
     if (bikeState.targetPower != bikeState.power) {
+      console.log(`[SIM] Setting Power: ${bikeState.targetPower}W (Gear: ${bikeState.gear})`);
       bikeState.busy = true;
       writeSerial('CM');
       setTimeout(() => {
