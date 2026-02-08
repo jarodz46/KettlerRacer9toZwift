@@ -20,12 +20,26 @@ const FTMS_CONTROL_POINT_UUID = '2AD9';
 let bikeState = {
   power: 0,
   cadence: 0,
+  prevTargetPower: 0,
   targetPower: 0,
-  gear: 5,
+  simPower : 0,
+  gear: 8,
   mode: 'STD',
   connected: false,
   busy: false // Prevents status loop from interrupting commands
 };
+
+const masse = 80;
+const gravite = 9.81;
+const rho = 1.225;
+
+const gearRatios = [
+  1.000, 0.885, 0.783, 0.693,
+  0.613, 0.543, 0.481, 0.425,
+  0.376, 0.333, 0.295, 0.261,
+  0.231, 0.204, 0.180, 0.160
+];
+
 // --- EXTERNAL CONDITIONS ---
 let externalConditions = {
   windspeed: 0,
@@ -59,6 +73,8 @@ function openSerial() {
       writeSerial('CM');
       bikeState.connected = true;
       requestStatusLoop();
+      adjustSimPowerLoop();
+      MajAutoGearLoop();
     }, 5000);
   });
 }
@@ -76,44 +92,78 @@ parser.on('data', (line) => {
   const data = line.trim();
   if (!data) return;
 
-  const metrics = data.split(/\s+/);
-  
+  const metrics = data.split('\t');
+  //console.log(`[Serial] Received: ${metrics}`);
   // Standard Kettler response parsing
-  if (metrics.length > 7) {
+  if (metrics.length >= 8) {
     const rawCadence = parseInt(metrics[1], 10);
+    const rawTargetPower = parseInt(metrics[4], 10);
     const rawPower = parseInt(metrics[metrics.length - 1], 10);
 
     if (!isNaN(rawCadence)) bikeState.cadence = rawCadence;
+    if (!isNaN(rawTargetPower)) bikeState.targetPower = rawTargetPower;
     if (!isNaN(rawPower)) bikeState.power = rawPower;
+
+    if (bikeState.mode == 'SIM' && bikeState.targetPower != bikeState.prevTargetPower && bikeState.simPower != bikeState.targetPower) {
+      if (bikeState.targetPower > bikeState.prevTargetPower && bikeState.gear < 16) {
+        bikeState.gear += 1;
+        console.log(`[SIM] Gear Up: ${bikeState.gear}`);
+      } else if (bikeState.targetPower < bikeState.prevTargetPower && bikeState.gear > 1) {
+        bikeState.gear -= 1;
+        console.log(`[SIM] Gear Down: ${bikeState.gear}`);
+      }
+    }
+    bikeState.prevTargetPower = bikeState.targetPower;
     
     if (updateValueCallback) {
-      updateSimPower();
       sendBikeData();
     }
   }
+  if (metrics.length == 4) {
+    const key = parseInt(metrics[3], 10);
+    console.log(`[Serial] Button Pressed: ${key}`);
+  }
 });
 
-function updateSimPower() {
+function getSimPower() {
+  const v = bikeState.cadence * gearRatios[bikeState.gear - 1] * 0.2525;
+  const F_g = masse * gravite * externalConditions.grade / 100.0;
+  const F_r = masse * gravite * externalConditions.crr;
+  const v_rel = v + externalConditions.windspeed;
+  const F_d = 0.5 * externalConditions.cw * v_rel * v_rel;
+  const totalForce = F_g + F_r + F_d;
+  
+  let P_sim = Math.max(50, totalForce * v);
+  P_sim = Math.min(400, P_sim);
+  P_sim = Math.round(P_sim / 5) * 5;
+
+  if (bikeState.simPower != P_sim) {
+    bikeState.simPower = P_sim;
+    //console.log(`[SIM] Speed: ${v.toFixed(2)} m/s, Cadence: ${bikeState.cadence} rpm, km/h: ${(v*3.6).toFixed(2)}`);
+    // console.log(`[SIM] Grade Force: ${F_g.toFixed(2)} N`);
+    // console.log(`[SIM] Rolling Resistance Force: ${F_r.toFixed(2)} N`);
+    // console.log(`[SIM] Aerodynamic Drag Force: ${F_d.toFixed(2)} N`);
+    //console.log(`[SIM] Total Force: ${totalForce.toFixed(2)} N`);
+    console.log(`[SIM] Calculated Power: ${bikeState.simPower}W (Gear: ${bikeState.gear})`);
+    return true;
+  }  
+  return false;
+}
+
+function MajAutoGearLoop() {
   if (bikeState.mode == 'SIM') {
-    var simpower = 170 * (1 + 1.15 * (bikeState.cadence - 80.0) / 80.0) * (1.0 + 3 * externalConditions.grade / 100.0);
-		// apply gear
-		simpower = Math.max(0.0, simpower * (1.0 + 0.1 * (bikeState.gear - 5)));
-    if (simpower < 75.0) simpower = 75.0;  // minimum power
-		// store
-		bikeState.targetPower = simpower.toFixed(1);
-    
-    // Use Traffic Control to send the power to the trainer
-    if (bikeState.targetPower != bikeState.power) {
-      console.log(`[SIM] Setting Power: ${bikeState.targetPower}W (Gear: ${bikeState.gear})`);
-      bikeState.busy = true;
-      writeSerial('CM');
-      setTimeout(() => {
-          
-          writeSerial(`PW${bikeState.targetPower}`);
-          setTimeout(() => { bikeState.busy = false; }, 150);
-      }, 150);
+    if (bikeState.cadence > 10) {
+      if (bikeState.cadence > 55 && bikeState.gear > 1) {
+        bikeState.gear -= 1;
+        console.log(`[SIM] Auto Gear Down: ${bikeState.gear}`);
+      }
+      else if (bikeState.cadence < 45 && bikeState.gear < 16) {
+        bikeState.gear += 1;
+        console.log(`[SIM] Auto Gear Up: ${bikeState.gear}`);
+      }
     }
   }
+  setTimeout(MajAutoGearLoop, 2000);
 }
 
 // --- STATUS LOOP (The Heartbeat) ---
@@ -128,6 +178,24 @@ function requestStatusLoop() {
 
   writeSerial('ST');
   setTimeout(requestStatusLoop, 250); // 4Hz refresh rate
+}
+
+function adjustSimPowerLoop() {
+  if (bikeState.mode == 'SIM') {
+    const update = getSimPower();
+    if (update) {
+      bikeState.busy = true;
+      writeSerial('CM');
+      // Wait 150ms for mode switch, then write power
+      setTimeout(() => {
+        console.log(`[SIM] Adjusting Power: ${bikeState.simPower}W current: ${bikeState.power}W`);
+        writeSerial(`PW${bikeState.simPower}`);
+        // Wait 150ms for processing, then unlock
+        setTimeout(() => { bikeState.busy = false; }, 150);
+      }, 150);
+    }
+  }
+  setTimeout(adjustSimPowerLoop, 500);
 }
 
 // --- BLUETOOTH LE SETUP ---
@@ -210,30 +278,17 @@ const controlPointChar = new bleno.Characteristic({
         bikeState.mode = 'SIM';
         break;
 
-      case 0x11: // Set Simulation Parameters (Slope/Wind/Crr/CdA/Gear)
-        // Parse simulation parameters from FTMS payload:
-        // offset 1: grade (SInt16, hundredths of percent)
-        // offset 2: Crr (SInt16, format varies - typically x10000)
-        // offset 3: CdA (SInt16, format varies - typically x10000)
-        // offset 4+: wind (SInt16), gear, etc.
+      case 0x11:
         try {
           // Ensure we are in SIM mode
           if (bikeState.mode !== 'SIM') bikeState.mode = 'SIM';
-
-          if (data.length >= 3) {
-            externalConditions.grade = data.readInt16LE(1);
-          }
-          if (data.length >= 5) {
-            externalConditions.crr = data.readInt16LE(2);
-          }
-          if (data.length >= 7) {
-            externalConditions.cw = data.readInt16LE(3);
-          }
-          if (data.length >= 1) {
-            externalConditions.windspeed = data.readInt16LE(0);
-          }
-
-          console.log(`[Zwift] SIM: ${JSON.stringify(externalConditions)}`);
+          externalConditions.windspeed = data.readInt16LE(1) / 1000.0;
+          externalConditions.grade = data.readInt16LE(3) / 100.0;
+          externalConditions.crr = data.readUInt8LE(5) / 10000.0;
+          externalConditions.cw = data.readUInt8LE(6) / 100.0;
+          
+          // console.log(`[Zwift] Data: ${JSON.stringify(data)}`);
+          // console.log(`[Zwift] SIM: ${JSON.stringify(externalConditions)}`);
 
           
         } catch (err) {
