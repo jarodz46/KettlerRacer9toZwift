@@ -9,7 +9,7 @@ const { ReadlineParser } = require('@serialport/parser-readline');
 // --- CONFIGURATION ---
 const SERIAL_PORT = '/dev/ttyUSB0';
 const BAUD_RATE = 57600;
-const MY_NAME = 'KettlerBike';
+const MY_NAME = 'Kettler Bike';
 
 // UUIDs (Standard Fitness Machine Service)
 const FTMS_SERVICE_UUID = '1826';
@@ -24,7 +24,7 @@ let bikeState = {
   targetPower: 0,
   simPower : 0,
   gear: 8,
-  mode: 'STD',
+  mode: 'SIM',
   connected: false,
   busy: false // Prevents status loop from interrupting commands
 };
@@ -74,7 +74,7 @@ function openSerial() {
       bikeState.connected = true;
       requestStatusLoop();
       adjustSimPowerLoop();
-      MajAutoGearLoop();
+      //MajAutoGearLoop();
     }, 5000);
   });
 }
@@ -107,9 +107,11 @@ parser.on('data', (line) => {
     if (bikeState.mode == 'SIM' && bikeState.targetPower != bikeState.prevTargetPower && bikeState.simPower != bikeState.targetPower) {
       if (bikeState.targetPower > bikeState.prevTargetPower && bikeState.gear < 16) {
         bikeState.gear += 1;
+        bikeState.simPower = 0;
         console.log(`[SIM] Gear Up: ${bikeState.gear}`);
       } else if (bikeState.targetPower < bikeState.prevTargetPower && bikeState.gear > 1) {
         bikeState.gear -= 1;
+        bikeState.simPower = 0;
         console.log(`[SIM] Gear Down: ${bikeState.gear}`);
       }
     }
@@ -188,7 +190,7 @@ function adjustSimPowerLoop() {
       writeSerial('CM');
       // Wait 150ms for mode switch, then write power
       setTimeout(() => {
-        console.log(`[SIM] Adjusting Power: ${bikeState.simPower}W current: ${bikeState.power}W`);
+        //console.log(`[SIM] Adjusting Power: ${bikeState.simPower}W current: ${bikeState.power}W`);
         writeSerial(`PW${bikeState.simPower}`);
         // Wait 150ms for processing, then unlock
         setTimeout(() => { bikeState.busy = false; }, 150);
@@ -218,24 +220,6 @@ const indoorBikeDataChar = new bleno.Characteristic({
   }
 });
 
-const gearChar = new bleno.Characteristic({
-  uuid: '2AD5', // FTMS Gear characteristic
-  properties: ['read', 'notify'],
-  onReadRequest: (offset, callback) => {
-    const buffer = Buffer.alloc(2);
-    // Gear: UInt16LE (1-12)
-    buffer.writeUInt16LE(bikeState.gear || 1, 0);
-    callback(bleno.Characteristic.RESULT_SUCCESS, buffer);
-  },
-  onSubscribe: (maxValueSize, updateValue) => {
-    console.log('[BLE] Gear Subscribed');
-    bikeState.gearUpdateCallback = updateValue;
-  },
-  onUnsubscribe: () => {
-    bikeState.gearUpdateCallback = null;
-  }
-});
-
 const controlPointChar = new bleno.Characteristic({
   uuid: FTMS_CONTROL_POINT_UUID,
   properties: ['write', 'indicate'],
@@ -256,7 +240,7 @@ const controlPointChar = new bleno.Characteristic({
         
       case 0x05: // Set Target Power (ERG Mode)
         const targetPower = data.readInt16LE(1);
-        console.log(`[Zwift] Set Power: ${targetPower}W`);
+        //console.log(`[Zwift] Set Power: ${targetPower}W`);
         
         bikeState.mode = 'ERG';
         bikeState.targetPower = targetPower;
@@ -284,11 +268,11 @@ const controlPointChar = new bleno.Characteristic({
           if (bikeState.mode !== 'SIM') bikeState.mode = 'SIM';
           externalConditions.windspeed = data.readInt16LE(1) / 1000.0;
           externalConditions.grade = data.readInt16LE(3) / 100.0;
-          externalConditions.crr = data.readUInt8LE(5) / 10000.0;
-          externalConditions.cw = data.readUInt8LE(6) / 100.0;
+          externalConditions.crr = data.readUInt8(5) / 10000.0;
+          externalConditions.cw = data.readUInt8(6) / 100.0;
           
           // console.log(`[Zwift] Data: ${JSON.stringify(data)}`);
-          // console.log(`[Zwift] SIM: ${JSON.stringify(externalConditions)}`);
+          //console.log(`[Zwift] SIM: ${JSON.stringify(externalConditions)}`);
 
           
         } catch (err) {
@@ -353,7 +337,7 @@ bleno.on('advertisingStart', (error) => {
     bleno.setServices([
       new bleno.PrimaryService({
         uuid: FTMS_SERVICE_UUID,
-        characteristics: [indoorBikeDataChar, gearChar, controlPointChar]
+        characteristics: [indoorBikeDataChar, controlPointChar]
       })
     ]);
   } else {
