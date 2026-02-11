@@ -5,6 +5,7 @@
 const bleno = require('@abandonware/bleno');
 const { SerialPort } = require('serialport');
 const { ReadlineParser } = require('@serialport/parser-readline');
+const { sendOverlay } = require('./tcpOverlayServer');
 
 // --- CONFIGURATION ---
 const SERIAL_PORT = '/dev/ttyUSB0';
@@ -108,10 +109,12 @@ parser.on('data', (line) => {
       if (bikeState.targetPower > bikeState.prevTargetPower && bikeState.gear < 16) {
         bikeState.gear += 1;
         bikeState.simPower = 0;
+        sendOverlay({gear: bikeState.gear});
         console.log(`[SIM] Gear Up: ${bikeState.gear}`);
       } else if (bikeState.targetPower < bikeState.prevTargetPower && bikeState.gear > 1) {
         bikeState.gear -= 1;
         bikeState.simPower = 0;
+        sendOverlay({gear: bikeState.gear});
         console.log(`[SIM] Gear Down: ${bikeState.gear}`);
       }
     }
@@ -141,12 +144,7 @@ function getSimPower() {
 
   if (bikeState.simPower != P_sim) {
     bikeState.simPower = P_sim;
-    //console.log(`[SIM] Speed: ${v.toFixed(2)} m/s, Cadence: ${bikeState.cadence} rpm, km/h: ${(v*3.6).toFixed(2)}`);
-    // console.log(`[SIM] Grade Force: ${F_g.toFixed(2)} N`);
-    // console.log(`[SIM] Rolling Resistance Force: ${F_r.toFixed(2)} N`);
-    // console.log(`[SIM] Aerodynamic Drag Force: ${F_d.toFixed(2)} N`);
-    //console.log(`[SIM] Total Force: ${totalForce.toFixed(2)} N`);
-    console.log(`[SIM] Calculated Power: ${bikeState.simPower}W (Gear: ${bikeState.gear})`);
+    //console.log(`[SIM] Calculated Power: ${bikeState.simPower}W (Gear: ${bikeState.gear})`);
     return true;
   }  
   return false;
@@ -298,6 +296,8 @@ const controlPointChar = new bleno.Characteristic({
 
 let updateControlPointCallback = null;
 
+const ellipticalCadenceCoef = 1.4;
+
 function getBikeDataBuffer() {
   const buffer = Buffer.alloc(10);
   // Flags: Instant Power (0x44) + Instant Cadence (0x02)
@@ -307,7 +307,7 @@ function getBikeDataBuffer() {
   buffer.writeUInt8(0x00, 2);
   buffer.writeUInt8(0x03, 3);
   // Cadence & Power
-  buffer.writeUInt16LE(bikeState.cadence * 2, 4);
+  buffer.writeUInt16LE(bikeState.cadence * 2 * ellipticalCadenceCoef, 4);
   buffer.writeInt16LE(bikeState.power, 6);
   // Padding
   buffer.writeUInt8(0x00, 8);
